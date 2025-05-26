@@ -4,6 +4,7 @@
 # Cargo config
 .cargo
 
+Cargo.lock
 # Profile-guided optimization
 /tmp
 pgo-data.profdata
