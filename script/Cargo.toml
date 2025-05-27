@@ -24,7 +24,6 @@ clap = { version = "4.0", features = ["derive", "env"] }
 tracing = "0.1.40"
 hex = "0.4.3"
 alloy-sol-types = { workspace = true }
-fibonacci-lib = { path = "../lib" }
 dotenv = "0.15.0"
 zktls-att-verification = {git = "https://github.com/primus-labs/zktls-att-verification.git", branch = "main"}
 

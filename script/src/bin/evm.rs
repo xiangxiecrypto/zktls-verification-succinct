@@ -10,26 +10,27 @@
 //! RUST_LOG=info cargo run --release --bin evm -- --system plonk
 //! ```
 
-use alloy_sol_types::SolType;
+// use alloy_sol_types::{sol, SolType};
+
 use clap::{Parser, ValueEnum};
-use fibonacci_lib::PublicValuesStruct;
 use serde::{Deserialize, Serialize};
 use sp1_sdk::{
     include_elf, HashableKey, ProverClient, SP1ProofWithPublicValues, SP1Stdin, SP1VerifyingKey,
 };
 use std::path::PathBuf;
+use zktls_att_verification::verification_data::VerifyingDataOpt;
 
 /// The ELF (executable and linkable format) file for the Succinct RISC-V zkVM.
-pub const FIBONACCI_ELF: &[u8] = include_elf!("zktls-program");
+pub const ZKTLS_ELF: &[u8] = include_elf!("zktls-program");
 
 /// The arguments for the EVM command.
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 struct EVMArgs {
-    #[arg(long, default_value = "20")]
-    n: u32,
     #[arg(long, value_enum, default_value = "groth16")]
     system: ProofSystem,
+    #[arg(long, default_value = "16")]
+    zktls_length: u32,
 }
 
 /// Enum representing the available proof systems
@@ -39,18 +40,84 @@ enum ProofSystem {
     Groth16,
 }
 
+// sol! {
+//     /// The public values encoded as a struct that can be easily deserialized inside Solidity.
+//     struct PublicZkTLSValuesStruct {
+//         bytes zktls_verification_key;
+//         bytes records;
+//     }
+// }
+
 /// A fixture that can be used to test the verification of SP1 zkVM proofs inside Solidity.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-struct SP1FibonacciProofFixture {
-    a: u32,
-    b: u32,
-    n: u32,
+struct SP1ZktlsProofFixture {
+    // zktls_verification_key: String,
+    // records: String,
     vkey: String,
-    public_values: String,
     proof: String,
 }
 
+fn load(length: u32, stdin: &mut SP1Stdin) {
+    match length {
+        16 => {
+            let verifying_key =
+                std::fs::read_to_string("fixtures/zktls/verifying_k256.key").unwrap();
+
+            stdin.write(&verifying_key);
+
+            let verifying_data =
+                std::fs::read_to_string("fixtures/zktls/data/bench16.json").unwrap();
+
+            let verifying_data: VerifyingDataOpt = serde_json::from_str(&verifying_data).unwrap();
+
+            stdin.write(&verifying_data);
+        }
+        256 => {
+            let verifying_key =
+                std::fs::read_to_string("fixtures/zktls/verifying_k256.key").unwrap();
+
+            stdin.write(&verifying_key);
+
+            let verifying_data =
+                std::fs::read_to_string("fixtures/zktls/data/bench256.json").unwrap();
+
+            let verifying_data: VerifyingDataOpt = serde_json::from_str(&verifying_data).unwrap();
+
+            stdin.write(&verifying_data);
+        }
+        1024 => {
+            let verifying_key =
+                std::fs::read_to_string("fixtures/zktls/verifying_k256.key").unwrap();
+
+            stdin.write(&verifying_key);
+
+            let verifying_data =
+                std::fs::read_to_string("fixtures/zktls/data/bench1024.json").unwrap();
+
+            let verifying_data: VerifyingDataOpt = serde_json::from_str(&verifying_data).unwrap();
+
+            stdin.write(&verifying_data);
+        }
+        2048 => {
+            let verifying_key =
+                std::fs::read_to_string("fixtures/zktls/verifying_k256.key").unwrap();
+
+            stdin.write(&verifying_key);
+
+            let verifying_data =
+                std::fs::read_to_string("fixtures/zktls/data/bench2048.json").unwrap();
+
+            let verifying_data: VerifyingDataOpt = serde_json::from_str(&verifying_data).unwrap();
+
+            stdin.write(&verifying_data);
+        }
+        _ => {
+            eprintln!("Unsupported length: {}", length);
+            std::process::exit(1);
+        }
+    }
+}
 fn main() {
     // Setup the logger.
     sp1_sdk::utils::setup_logger();
@@ -62,13 +129,13 @@ fn main() {
     let client = ProverClient::from_env();
 
     // Setup the program.
-    let (pk, vk) = client.setup(FIBONACCI_ELF);
+    let (pk, vk) = client.setup(ZKTLS_ELF);
 
     // Setup the inputs.
     let mut stdin = SP1Stdin::new();
-    stdin.write(&args.n);
+    load(args.zktls_length, &mut stdin);
 
-    println!("n: {}", args.n);
+    println!("zktls verification length: {}", args.zktls_length);
     println!("Proof System: {:?}", args.system);
 
     // Generate the proof based on the selected proof system.
@@ -88,30 +155,34 @@ fn create_proof_fixture(
     system: ProofSystem,
 ) {
     // Deserialize the public values.
-    let bytes = proof.public_values.as_slice();
-    let PublicValuesStruct { n, a, b } = PublicValuesStruct::abi_decode(bytes).unwrap();
+    let _bytes = proof.public_values.as_slice();
 
-    // Create the testing fixture so we can test things end-to-end.
-    let fixture = SP1FibonacciProofFixture {
-        a,
-        b,
-        n,
+    // let PublicZkTLSValuesStruct {
+    //     zktls_verification_key,
+    //     records,
+    // } = PublicZkTLSValuesStruct::abi_decode(bytes).unwrap();
+
+    let fixture = SP1ZktlsProofFixture {
+        // zktls_verification_key: zktls_verification_key.to_string(),
+        // records: records.to_string(),
         vkey: vk.bytes32().to_string(),
-        public_values: format!("0x{}", hex::encode(bytes)),
         proof: format!("0x{}", hex::encode(proof.bytes())),
     };
+
+    // println!("Zktls Verification Key: {}", fixture.zktls_verification_key);
+
+    // The public values are the values which are publicly committed to by the zkVM.
+    //
+    // If you need to expose the inputs or outputs of your program, you should commit them in
+    // the public values.
+
+    // println!("Public Records: {}", fixture.records);
 
     // The verification key is used to verify that the proof corresponds to the execution of the
     // program on the given input.
     //
     // Note that the verification key stays the same regardless of the input.
     println!("Verification Key: {}", fixture.vkey);
-
-    // The public values are the values which are publicly committed to by the zkVM.
-    //
-    // If you need to expose the inputs or outputs of your program, you should commit them in
-    // the public values.
-    println!("Public Values: {}", fixture.public_values);
 
     // The proof proves to the verifier that the program was executed with some inputs that led to
     // the give public values.

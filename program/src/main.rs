@@ -9,9 +9,6 @@
 use zktls_att_verification::verification_data::VerifyingDataOpt;
 sp1_zkvm::entrypoint!(main);
 
-// use alloy_sol_types::SolType;
-// use fibonacci_lib::{fibonacci, PublicValuesStruct};
-
 pub fn main() {
     let verifying_key: String = sp1_zkvm::io::read();
     let verifying_data: VerifyingDataOpt = sp1_zkvm::io::read();
